@@ -110,3 +110,69 @@ t = np.array([[[0, 1, 2], [3, 4, 5]], [[6, 7, 8], [9, 10, 11]]])
 ft = torch.FloatTensor(t)
 print(ft.shape)
 print(ft)
+
+# 2차원 텐서로
+print(ft.view([-1, 3]))
+print(ft.view([-1, 3]).shape)
+
+# 3차원 텐서로
+print(ft.view([-1, 1, 3]))
+print(ft.view([-1, 1, 3]).shape)
+
+# 스퀴즈
+print("스퀴즈 언스퀴즈----------------------------------------------")
+ft = torch.FloatTensor([[0], [1], [2]])
+print(ft)
+print(ft.shape)
+print(ft.squeeze())
+print(ft.squeeze().shape)
+ft = torch.FloatTensor([0, 1, 2])
+print(ft.shape)
+print(ft.unsqueeze(0))
+print(ft.unsqueeze(0).shape)
+print(ft.view(1, -1))
+print(ft.view(1, -1).shape)
+print(ft.unsqueeze(1))
+print(ft.unsqueeze(1).shape)
+print(ft.unsqueeze(-1))
+print(ft.unsqueeze(-1).shape)
+print(ft.view(-1, 1))
+print(ft.view(-1, 1).shape)
+
+# 타입 캐스팅
+print("타입 캐스팅----------------------------------------------")
+# 만들때는 torch.타입() 형식이고...
+lt = torch.LongTensor([1, 2, 3, 4])
+print(lt)
+# 변환은 간단하게 메서드 호출
+print(lt.float())
+# 롱 타입은 그냥 숫자만 나오는데 바이트 타입은 dtype 속성이 나오네...torch.uint8이라고...
+bt = torch.ByteTensor([True, False, False, True])
+print(bt)
+print(bt.long())
+print(bt.float())
+
+# 연결
+print("연결----------------------------------------------")
+x = torch.FloatTensor([[1, 2], [3, 4]])
+y = torch.FloatTensor([[5, 6], [7, 8]])
+print("0축 연결:", torch.cat([x, y], dim=0))
+print("1축 연결:", torch.cat([x, y], dim=1))
+
+# 스택킹
+x = torch.FloatTensor([1, 4])
+y = torch.FloatTensor([2, 5])
+z = torch.FloatTensor([3, 6])
+# 스택킹은 이렇게 나열하면 되는데...
+print("스택킹:", torch.stack([x, y, z]))
+# 같은 효과를 내는 cat을 사용하면 언스퀴즈를 먼저하고 이어붙이는 꼴이다...
+print("스택킹 cat:", torch.cat([x.unsqueeze(0), y.unsqueeze(0), z.unsqueeze(0)], dim=0))
+print("스택킹 dim=1:", torch.stack([x, y, z], dim=1))
+
+# 인플레이스 연산(이게 덮어쓰기라고 해야되나...)
+print("인플레이스 연산----------------------------------------------")
+x = torch.FloatTensor([[1, 2], [3, 4]])
+print("mul 2:", x.mul(2.0))
+print("원본:", x)
+print("mul_ 2:", x.mul_(2.0))
+print("원본:", x)
