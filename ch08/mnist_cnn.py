@@ -1,13 +1,19 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision.datasets as dsets
+import torchvision.transforms as transforms
+import torch.nn.init
+from torch.utils.data import DataLoader
 
 torch.manual_seed(0)
 
 inputs = torch.Tensor(1, 1, 28, 28)
-conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
+conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1)
 pool = nn.MaxPool2d(kernel_size=2, stride=2)
+pool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=1)
 
 print(inputs.shape)
 out = conv1(inputs)
@@ -18,18 +24,27 @@ out = conv2(out)
 print(out.shape)
 out = pool(out)
 print(out.shape)
+# 간단한 층은 아래와 같고...
+# out = out.view(out.size(0), -1)
+# print(out.shape)
+# fc = nn.Linear(3136, 10)
+# out = fc(out)
+# print(out.shape)
+# print(out)
+# 더 깊은 층은 다음과 같이...
+print("더 깊은 층에서는...")
+out = conv3(out)
+print(out.shape)
+out = pool2(out)
+print(out.shape)
 out = out.view(out.size(0), -1)
 print(out.shape)
-fc = nn.Linear(3136, 10)
+fc = nn.Linear(4 * 4 * 128, 625)
 out = fc(out)
 print(out.shape)
-print(out)
-
-import torchvision.datasets as dsets
-import torchvision.transforms as transforms
-import torch.nn.init
-from torch.utils.data import DataLoader
-
+fc = nn.Linear(625, 10)
+out = fc(out)
+print(out.shape)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -74,9 +89,30 @@ class CNN(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
+
+        # 더 층을 깊게 만들어본다...
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            # 그대로면 출력이 (?,128,3,3)이 되니까, 여긴 패딩을 넣어준다...
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+        )
+
+        # 4번째는 선형 층을 넣는데...드롭아웃도 추가...
+        self.keep_prob = 0.5
+        self.fc1 = nn.Linear(4 * 4 * 128, 625, bias=True)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        self.layer4 = nn.Sequential(
+            self.fc1,
+            nn.ReLU(),
+            nn.Dropout(p=1 - self.keep_prob),
+        )
+
         # 요게 받은 데이터 수 계산해서 맞춰줘야 하는데, 결국 처음부터 중간 과정을 다 알고 있어야 한다...
-        self.fc = nn.Linear(7 * 7 * 64, 10, bias=True)
-        torch.nn.init.xavier_uniform_(self.fc.weight)
+        # self.fc = nn.Linear(7 * 7 * 64, 10, bias=True)
+        # 더 깊게 하려면...
+        self.fc2 = nn.Linear(625, 10, bias=True)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
 
     def forward(self, x):
         # X(?,1,28,28)
@@ -84,9 +120,12 @@ class CNN(nn.Module):
         # conv로 1->32, pool로 28->14(?,32,14,14)
         out = self.layer2(out)
         # conv로 32->64, pool로 14->7(?,64,7,7)
+        # 더 깊게 하려고 컨볼루션 1개, linear 1개 추가...
+        out = self.layer3(out)
         out = out.view(out.size(0), -1)
-        # 마지막 (?,10)을 위해 flatten해서 (?,3136)
-        out = self.fc(out)
+        # 이게 (4*4*128, 625)여야 하는데...
+        out = self.layer4(out)
+        out = self.fc2(out)
         return out
 
 
