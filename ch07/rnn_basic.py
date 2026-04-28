@@ -1,27 +1,45 @@
 import numpy as np
 
-timesteps = 10
-input_size = 4
+seq_len = 10
+word_dim = 4
 hidden_size = 8
 
-inputs = np.random.random((timesteps, input_size))
+sequence = np.random.random((seq_len, word_dim))
 hidden_state_t = np.zeros((hidden_size,))
 
-Wx = np.random.random((hidden_size, input_size))
+Wx = np.random.random((hidden_size, word_dim))
+print(sequence.shape)
+print(Wx.shape)
+print(sequence[0].shape)
+input0 = sequence[0]
+print(input0)
+# 이건 (8,4) x (4,) -> (8,4) x (4,1) = (8,1) -> (8,)
+print(Wx.dot(input0).shape)
+# 이건 (4,) x (4,8) -> (1,4) x (4,8) = (1,8) -> (8,)
+print(input0.dot(Wx.T).shape)
+bb = input0.dot(Wx.T)
+print(bb)
+# 그러니까 (4,)는 벡터나 행렬이 아니고 필요하면 대충 (4,1) 또는 (1,4)로 본다...
+# 그런게 섞여있는 연산 결과가 (1,8)로 나오면 대충 (8,)로 내놓는다...
 Wh = np.random.random((hidden_size, hidden_size))
 b = np.random.random((hidden_size,))
 
 # 이게 곱이 어떻게 돌아가는 거냐...
-print("X: {}".format(inputs[0].shape))
+print("X: {}".format(sequence[0].shape))
 print("Wx: {}".format(Wx.shape))
-print("곱: {}".format(np.dot(Wx, inputs[0]).shape))
+print("곱: {}".format(np.dot(Wx, sequence[0]).shape))
 
 
 total_hidden_states = []
 
-for input_t in inputs:
-    # Wx (8,4), input (4,) -> (8,1), Wh (8,8), h (8,) -> (8,1)
-    output_t = np.tanh(np.dot(Wx, input_t) + np.dot(Wh, hidden_state_t) + b)
+for word in sequence:
+    # Wx (8,4) x word (4,) -> (8,1) + Wh (8,8), h (8,) -> (8,) => stat (8,)
+    # 첫 번째 항은 word를 state로 바꾸고, 두 번째 항은 과거 state를 현재 state로 바꾸고, 더해서 현재 state
+    output_t = np.tanh(np.dot(Wx, word) + np.dot(Wh, hidden_state_t) + b)
+    # out = total_hidden_states = stack((8,), 10, dim=0) => (10,8)
+    # 그걸 out1, out2로 내놓는데, RNN 모듈에서는 행렬로 stack 하니까, [out1, out2, ...]가 된다...
+    # 즉 최종 아웃은 (seq, hidden) -> (10,8)이 된다...
+    # 그럼 결국 input (batch, sequence, word) x W (batch, word, hidden) -> (batch, sequnce, hidden)
     total_hidden_states.append(list(output_t))
     hidden_state_t = output_t
 
