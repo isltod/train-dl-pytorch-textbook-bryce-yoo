@@ -288,13 +288,6 @@ def evaludate(model, dataloader, criterion, device):
     return val_loss, val_accuracy
 
 
-# 1. cuDNN 사용 안 함 (속도는 느려지지만 에러 해결 가능성 높음)
-# torch.backends.cudnn.enabled = False
-
-# 2. 또는, 비결정론적 알고리즘 사용 비활성화
-# torch.backends.cudnn.deterministic = True
-# torch.backends.cudnn.benchmark = False
-
 # 검증 손실 최소값을 찾을거니까 일단 제일 큰 값으로 시작
 best_val_loss = float("inf")
 for epoch in range(num_epochs):
