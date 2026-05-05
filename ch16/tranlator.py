@@ -258,45 +258,129 @@ def evaluation(model, dataloader, loss_function, device):
     return total_loss / len(dataloader), total_correct / total_count
 
 
-num_epochs = 30
-best_val_loss = float("inf")
-for epoch in range(num_epochs):
-    model.train()
+def train(model, train_dataloader, valid_dataloader, loss_function, optimizer, device):
+    num_epochs = 30
+    best_val_loss = float("inf")
+    for epoch in range(num_epochs):
+        model.train()
 
-    for encoder_inputs, decoder_inputs, decoder_targets in train_dataloader:
-        encoder_inputs, decoder_inputs, decoder_targets = (
-            encoder_inputs.to(device),
-            decoder_inputs.to(device),
-            decoder_targets.to(device),
+        for encoder_inputs, decoder_inputs, decoder_targets in train_dataloader:
+            encoder_inputs, decoder_inputs, decoder_targets = (
+                encoder_inputs.to(device),
+                decoder_inputs.to(device),
+                decoder_targets.to(device),
+            )
+            optimizer.zero_grad()
+            outputs = model(encoder_inputs, decoder_inputs)
+            # outputs.view(batch_size x seq_len, tar_vocab_size),
+            # decoder_targets.view(batch_size x seq_len,) 정수 정답지
+            loss = loss_function(
+                outputs.view(-1, tar_vocab_size), decoder_targets.view(-1)
+            )
+            loss.backward()
+            optimizer.step()
+
+        # 손실과 정확도가 다르긴 한데, 정확도를 위해서 다시 훈련 루프를 도는게 맞냐?
+        train_loss, train_acc = evaluation(
+            model, train_dataloader, loss_function, device
         )
-        optimizer.zero_grad()
-        outputs = model(encoder_inputs, decoder_inputs)
-        # outputs.view(batch_size x seq_len, tar_vocab_size),
-        # decoder_targets.view(batch_size x seq_len,) 정수 정답지
-        loss = loss_function(outputs.view(-1, tar_vocab_size), decoder_targets.view(-1))
-        loss.backward()
-        optimizer.step()
-
-    # 손실과 정확도가 다르긴 한데, 정확도를 위해서 다시 훈련 루프를 도는게 맞냐?
-    train_loss, train_acc = evaluation(model, train_dataloader, loss_function, device)
-    val_loss, val_acc = evaluation(model, valid_dataloader, loss_function, device)
-    print(
-        f"Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}"
-    )
-
-    if val_loss < best_val_loss:
+        val_loss, val_acc = evaluation(model, valid_dataloader, loss_function, device)
         print(
-            f"Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving model..."
+            f"Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}"
         )
-        best_val_loss = val_loss
-        torch.save(model.state_dict(), "ch14/best_seq2seq_translator.pth")
 
+        if val_loss < best_val_loss:
+            print(
+                f"Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving model..."
+            )
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), "ch14/best_seq2seq_translator.pth")
+
+
+# train(model, train_dataloader, valid_dataloader, loss_function, optimizer, device)
 model.load_state_dict(torch.load("ch14/best_seq2seq_translator.pth"))
 model.to(device)
-val_loss, val_accuracy = evaluation(model, valid_dataloader, loss_function, device)
-print(
-    f"Best model Validation Loss: {val_loss:.4f} | Validation Accuracy: {val_accuracy:.4f}"
-)
+# val_loss, val_accuracy = evaluation(model, valid_dataloader, loss_function, device)
+# print(
+#     f"Best model Validation Loss: {val_loss:.4f} | Validation Accuracy: {val_accuracy:.4f}"
+# )
 
-print("<sos> :", tar_vocab["<sos>"])
-print("<eos> :", tar_vocab["<eos>"])
+# print("<sos> :", tar_vocab["<sos>"])
+# print("<eos> :", tar_vocab["<eos>"])
+
+
+# 번역기로 동작시키기
+# 원문 정수 시퀀스를 텍스트 시퀀스로
+def seq_to_src(input_seq):
+    sentence = ""
+    for encoded_word in input_seq:
+        if encoded_word != 0:
+            sentence += index_to_src[encoded_word] + " "
+    return sentence
+
+
+# 번역문 정수 시퀀스를 텍스트 시퀀스로
+def seq_to_tar(input_seq):
+    sentence = ""
+    for encoded_word in input_seq:
+        if (
+            encoded_word != 0
+            and encoded_word != tar_vocab["<sos>"]
+            and encoded_word != tar_vocab["<eos>"]
+        ):
+            sentence += index_to_tar[encoded_word] + " "
+    return sentence
+
+
+def decode_sequence(
+    input_seq,
+    model,
+    src_vocab_size,
+    tar_vocab_size,
+    max_output_len,
+    int_to_src_token,
+    int_to_tar_token,
+):
+    # 원문 입력을 받아서 텐서로...
+    encoder_inputs = torch.tensor(input_seq, dtype=torch.long).unsqueeze(0).to(device)
+    # 인코더에서 히든과 셀을 받는데 어떤게 맥락이고 나머진 뭐냐...
+    hidden, cell = model.encoder(encoder_inputs)
+    # 디코더 입력을 일단 문장 시작 <sos>로 만들어놓고...
+    decoder_input = (
+        torch.tensor([tar_vocab["<sos>"]], dtype=torch.long).unsqueeze(0).to(device)
+    )
+    decoded_tokens = []
+    # 문장의 각 단어자리마다 돌면서...
+    for _ in range(max_output_len):
+        # 처음엔 <sos>, 그 다음부턴 output.argmax 가지고 만든 token으로 모델 디코더 입력하고,
+        # 더불어 hidden과 cell도 앞에 걸 받아서 계속 가는데...이게 뭐가 맥락이지?
+        output, hidden, cell = model.decoder(decoder_input, hidden, cell)
+        output_token = output.argmax(dim=-1).item()
+        # 문장 마지막 기호를 만나면 끝이라...아예 max_output_len까지만 도는데?
+        if output_token == tar_vocab["<eos>"]:
+            break
+        # 생산된 토큰은 문장을 만들기 위해서 누적시키고
+        decoded_tokens.append(output_token)
+        # 생산된 토큰을 다음 단어의 입력 자료로...
+        decoder_input = (
+            torch.tensor([output_token], dtype=torch.long).unsqueeze(0).to(device)
+        )
+    # 아마도 int_to_tar_token이 토큰을 단어로 바꾸는 모양...문장 반환...
+    return " ".join([int_to_tar_token[token] for token in decoded_tokens])
+
+
+for seq_index in [3, 50, 100, 300, 1001]:
+    input_seq = encoder_input_train[seq_index]
+    translated_text = decode_sequence(
+        input_seq,
+        model,
+        src_vocab_size,
+        tar_vocab_size,
+        20,
+        index_to_src,
+        index_to_tar,
+    )
+    print("입력문장 :", seq_to_src(input_seq))
+    print("정답문장 :", seq_to_tar(decoder_target_train[seq_index]))
+    print("번역문장 :", translated_text)
+    print("-" * 50)
